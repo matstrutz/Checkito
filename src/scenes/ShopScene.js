@@ -1,4 +1,5 @@
 import { BUFF_RARITIES, BUFFS_MAP, getShopBuffs } from '../data/buffs.js';
+import { getPaymentCost } from '../data/progression.js';
 
 export default class ShopScene extends Phaser.Scene {
   constructor() { super({ key: 'ShopScene' }); }
@@ -23,6 +24,8 @@ export default class ShopScene extends Phaser.Scene {
     const mainW = compact ? width - margin * 2 : width - mainX - margin;
     const mainH = height - mainY - margin;
     const panelTextWidth = Math.max(100, sidebarW - 24);
+    const nextPaymentRound = this.getNextPaymentRound();
+    const roundsUntilPayment = nextPaymentRound - this.round;
 
     // background
     this.add.rectangle(0, 0, width, height, 0x121418).setOrigin(0);
@@ -37,7 +40,9 @@ export default class ShopScene extends Phaser.Scene {
       fontSize: compact ? '14px' : '16px', color: '#ddd',
       wordWrap: { width: panelTextWidth }
     });
-    this.payInfo = this.add.text(margin + 12, margin + 64, `Próximo pagamento: a cada 3 rodadas`, {
+    this.payInfo = this.add.text(margin + 12, margin + 64, nextPaymentRound
+      ? `Próximo pagamento: em ${roundsUntilPayment} rodada${roundsUntilPayment === 1 ? '' : 's'} (rodada ${nextPaymentRound})`
+      : 'Nenhum pagamento restante nesta campanha', {
       fontSize: '12px', color: '#aaa',
       wordWrap: { width: panelTextWidth }
     });
@@ -98,6 +103,13 @@ export default class ShopScene extends Phaser.Scene {
     this.add.text(proceedX, proceedY, 'Prosseguir', { fontSize: compact ? '16px' : '18px', color: '#fff' }).setOrigin(0.5);
     btn.on('pointerup', () => this.onProceed());
 
+  }
+
+  getNextPaymentRound() {
+    for (let round = this.round + 1; round <= 30; round++) {
+      if (getPaymentCost(round) > 0) return round;
+    }
+    return null;
   }
 
   buyBuff(buff) {

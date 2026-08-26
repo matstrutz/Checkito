@@ -29,7 +29,8 @@ function enemyFormation(rows, idPrefix) {
       if (pieceType.toLowerCase() === 'x') return;
       pieces.push({
         x,
-        y,
+        // The first supplied row is the pawn line (rank 5), followed by rank 6.
+        y: y === 0 ? 1 : 0,
         pt: pieceType.toLowerCase(),
         id: `${idPrefix}_${x}_${y}`,
         hasMoved: false
