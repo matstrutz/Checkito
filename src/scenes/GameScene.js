@@ -131,7 +131,8 @@ export default class GameScene extends Phaser.Scene {
   }
 
   continueOrEndPlayerTurn(piece) {
-    const moveEffect = this.runBuffHooks('onMove', piece, null, this.playerMovesThisTurn);
+    const moveNumber = this.playerMovesThisTurn;
+    const moveEffect = this.runBuffHooks('onMove', piece, null, moveNumber);
     if (moveEffect && moveEffect.keepTurn) {
       this.extraMoveRule = {
         allowedPieceId: moveEffect.allowedPieceId || null,

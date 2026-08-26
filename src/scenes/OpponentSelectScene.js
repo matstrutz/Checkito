@@ -83,8 +83,7 @@ export default class OpponentSelectScene extends Phaser.Scene {
       const pool = eligibleEnemies.filter(enemy => enemy.tier === desiredTier);
       const e = pool.length ? pool[Phaser.Math.Between(0, pool.length - 1)] : eligibleEnemies[0];
       const reward = e.value || 0;
-      const difficulty = Phaser.Math.Between(1, 3);
-      cards.push({ preset: e, reward, difficulty });
+      cards.push({ preset: e, reward });
     }
 
     // layout cards centered and responsive
@@ -102,7 +101,7 @@ export default class OpponentSelectScene extends Phaser.Scene {
       const cy = paymentRound ? 250 : 220;
       const box = this.add.rectangle(cx, cy, cardW, cardH, 0x20232a).setStrokeStyle(2, 0x666).setInteractive({ useHandCursor: true });
       const name = this.add.text(cx, cy - 70, c.preset.displayName || c.preset.id, { fontSize: '18px', color: '#fff' }).setOrigin(0.5);
-      const info = this.add.text(cx, cy - 10, `Tier: ${c.preset.tier || 'SPECIAL'}\nRecompensa: ${c.reward} pontos\nDificuldade: ${c.difficulty}`, { fontSize: '16px', color: '#ddd' }).setOrigin(0.5);
+      const info = this.add.text(cx, cy - 10, `Tier: ${c.preset.tier || 'SPECIAL'}\nRecompensa: ${c.reward} pontos`, { fontSize: '16px', color: '#ddd' }).setOrigin(0.5);
       const choose = this.add.text(cx, cy + 70, 'Selecionar', { fontSize: '18px', color: '#0f0' }).setOrigin(0.5);
       const startMatch = () => {
         console.log('[OpponentSelect] choosing opponent', c.preset.id, 'score=', this.score, 'round=', this.round);

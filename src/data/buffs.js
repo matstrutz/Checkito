@@ -58,13 +58,13 @@ export const BUFFS = [
   {
     id: 'worth_challenger',
     name: 'Worth Challenger',
-    description: 'Suas capturas de rei geram mais 2 pontos de recompensa',
+    description: 'Os reis que voce captura geram mais 3 pontos',
     rarity: BUFF_RARITIES.COMMON,
     price: 8,
     hooks: {
       onCapture: (gameScene, piece, targetPiece, baseValue) => {
         if (gameScene.captureSide === 'player' && (targetPiece.pt || '').toUpperCase() === 'K') {
-          return baseValue + 2;
+          return baseValue + 3;
         }
         return baseValue;
       }
