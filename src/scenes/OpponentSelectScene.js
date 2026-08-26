@@ -1,4 +1,5 @@
-import chars from '../data/characters.js';
+import chars, { ENEMY_TIERS } from '../data/characters.js';
+import { getPaymentCost } from '../data/progression.js';
 
 export default class OpponentSelectScene extends Phaser.Scene {
   constructor() { super({ key: 'OpponentSelectScene' }); }
@@ -9,7 +10,7 @@ export default class OpponentSelectScene extends Phaser.Scene {
     if (data && typeof data.score === 'number') {
       this.score = data.score;
       this.upgrades = Array.isArray(data.upgrades) ? data.upgrades.slice() : [];
-      this.round = data.round || 1;
+      this.round = Number.isInteger(data.round) ? data.round : 0;
     } else {
       try {
         const raw = localStorage.getItem('checkito_state');
@@ -17,16 +18,16 @@ export default class OpponentSelectScene extends Phaser.Scene {
           const s = JSON.parse(raw);
           this.score = typeof s.score === 'number' ? s.score : 0;
           this.upgrades = Array.isArray(s.upgrades) ? s.upgrades.slice() : [];
-          this.round = s.round || 1;
+          this.round = Number.isInteger(s.round) ? s.round : 0;
         } else {
           this.score = 0;
           this.upgrades = [];
-          this.round = 1;
+          this.round = 0;
         }
       } catch (e) {
         this.score = 0;
         this.upgrades = [];
-        this.round = 1;
+        this.round = 0;
       }
       // if playerCharacterId wasn't passed, try to read from persisted state
       if (!this.playerCharacterId) {
@@ -43,6 +44,9 @@ export default class OpponentSelectScene extends Phaser.Scene {
 
   create() {
     const { width, height } = this.scale;
+    const nextRound = this.round + 1;
+    const paymentCost = getPaymentCost(nextRound);
+    const paymentRound = paymentCost > 0;
     this.add.text(width/2, 40, 'Escolha oponente', { fontSize: '28px', color: '#fff' }).setOrigin(0.5);
 
     // debug: show current score/upgrades/round
@@ -50,16 +54,35 @@ export default class OpponentSelectScene extends Phaser.Scene {
     this.add.text(width - 240, 44, `Upgrades: ${this.upgrades.join(', ') || 'Nenhum'}`, { fontSize: '12px', color: '#ccc' });
     this.add.text(width - 240, 60, `Rodada (camp): ${this.round}`, { fontSize: '12px', color: '#ccc' });
 
-    // prepare enemy presets
+    if (paymentRound) {
+      this.add.text(width / 2, 82, 'Rodada de pagamento', {
+        fontSize: '20px', color: '#ff4444'
+      }).setOrigin(0.5);
+      this.add.text(width / 2, 106, `Após essa rodada, se não houver ${paymentCost} pontos para pagar, você perderá`, {
+        fontSize: '12px', color: '#ff4444',
+        wordWrap: { width: Math.max(240, width - 40) },
+        align: 'center'
+      }).setOrigin(0.5);
+    }
+
+    // Prepare enemy presets allowed in the next campaign round.
     const enemies = Object.values(chars.enemyCharacters);
-    // generate 3 semi-random opponent cards
+    const eligibleEnemies = enemies.filter(enemy => enemy.tier !== ENEMY_TIERS.SPECIAL);
+    const fixedTier = nextRound === 30
+      ? ENEMY_TIERS.BOSS_FINAL
+      : nextRound % 3 === 0
+        ? ENEMY_TIERS.BOSS
+        : null;
+
+    // Generate 3 cards. Regular rounds can contain at most one Advanced card.
     const cards = [];
-    const kingRewardValue = 10; // value awarded for capturing a king
+    const advancedAppears = !fixedTier && Math.random() < 0.25;
+    const advancedCardIndex = advancedAppears ? Phaser.Math.Between(0, 2) : -1;
     for (let i = 0; i < 3; i++) {
-      // choose an enemy preset at random (fallback to the first)
-      const e = enemies.length ? enemies[Phaser.Math.Between(0, enemies.length - 1)] : { id: 'TheAllRounder', displayName: 'TheAllRounder' };
-      // reward now represents the capture value of the enemy king (makes decision to capture king meaningful)
-      const reward = kingRewardValue;
+      const desiredTier = fixedTier || (i === advancedCardIndex ? ENEMY_TIERS.ADVANCED : ENEMY_TIERS.BASIC);
+      const pool = eligibleEnemies.filter(enemy => enemy.tier === desiredTier);
+      const e = pool.length ? pool[Phaser.Math.Between(0, pool.length - 1)] : eligibleEnemies[0];
+      const reward = e.value || 0;
       const difficulty = Phaser.Math.Between(1, 3);
       cards.push({ preset: e, reward, difficulty });
     }
@@ -76,10 +99,10 @@ export default class OpponentSelectScene extends Phaser.Scene {
       const c = cards[i];
       const x = baseX + i * (cardW + gap);
       const cx = x + cardW / 2;
-      const cy = 220;
+      const cy = paymentRound ? 250 : 220;
       const box = this.add.rectangle(cx, cy, cardW, cardH, 0x20232a).setStrokeStyle(2, 0x666).setInteractive({ useHandCursor: true });
       const name = this.add.text(cx, cy - 70, c.preset.displayName || c.preset.id, { fontSize: '18px', color: '#fff' }).setOrigin(0.5);
-      const info = this.add.text(cx, cy - 10, `Recompensa: ${c.reward} pontos\nDificuldade: ${c.difficulty}`, { fontSize: '16px', color: '#ddd' }).setOrigin(0.5);
+      const info = this.add.text(cx, cy - 10, `Tier: ${c.preset.tier || 'SPECIAL'}\nRecompensa: ${c.reward} pontos\nDificuldade: ${c.difficulty}`, { fontSize: '16px', color: '#ddd' }).setOrigin(0.5);
       const choose = this.add.text(cx, cy + 70, 'Selecionar', { fontSize: '18px', color: '#0f0' }).setOrigin(0.5);
       const startMatch = () => {
         console.log('[OpponentSelect] choosing opponent', c.preset.id, 'score=', this.score, 'round=', this.round);

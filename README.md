@@ -7,13 +7,18 @@ Resumo do que existe agora
 - Menu e fluxo: `src/scenes/MenuScene.js`, `src/scenes/CharacterSelectScene.js` (seletor de personagens), `src/scenes/GameOverScene.js`.
 - Progressão roguelite: `src/scenes/OpponentSelectScene.js` e `src/scenes/ShopScene.js` — seleção de oponentes, loja entre partidas e checkpoints de pagamento na campanha.
 - Dados de presets de personagem: `src/data/characters.js` (ex.: `TheSquire`, `TheAllRounder`).
+- Tiers de inimigos: `BASIC`, `ADVANCED`, `BOSS`, `BOSS_FINAL` e `SPECIAL` já estão disponíveis em `ENEMY_TIERS`. Cada inimigo possui um campo `tier` para controlar futuramente em quais rodadas ele pode aparecer.
 
 Principais mudanças implementadas
 - Unificação de recurso: removido `coins/money` — agora existe apenas `score` (pontuação). O jogador começa com 0 pontos.
 - Capturas: cada captura adiciona pontos a `score` usando o mapa de valores: P=1, N=3, B=3, R=5, Q=8, K=10. Capturar o rei concede a recompensa indicada no card do oponente.
-- Opponent cards: em `OpponentSelectScene` cada card mostra `Recompensa: X pontos` (atualmente corresponde ao valor do rei, padrão 10).
+- Opponent cards: em `OpponentSelectScene` cada card mostra `Recompensa: X pontos`, usando o valor definido no preset do inimigo.
+- Inimigos possuem `tier` e `value`: `BASIC` vale 6, `ADVANCED` vale 8, `BOSS` vale 10, `BOSS_FINAL` vale 15 e `TheAllRounder` é um `SPECIAL` que vale 12.
+- Buffs disponíveis em `src/data/buffs.js`: `Pawn's Game`, `Luck Move`, `Worth Challenger`, `Double Pawns`, `Double Jump`, `Ghost Bishops` e `Honorable Sacrifice`, usando hooks para modificar capturas, movimentos e ofertas da loja.
 - Shop e pagamento: `ShopScene` usa `score` para compras e para pagar a taxa periódica (configurada por `paymentInterval`). Se o jogador não tiver pontos suficientes para pagar, é `GameOver`.
 - Persistência: estado de progressão é salvo em `localStorage` sob a chave `checkito_state` com o formato { score, upgrades, round, playerCharacterId }.
+- Final de campanha: a campanha tem no máximo 30 rodadas. Ao concluir a rodada 30, o jogador vence.
+- Pagamentos: checkpoints acontecem nas rodadas 3, 6, 9, ..., 30, com custos configurados em `src/data/progression.js`: 20, 25, 30, 35, 40, 45, 50, 55, 60 e 80 pontos.
 
 Como rodar (desenvolvimento)
 1. Servir arquivos estáticos (Node):
@@ -38,6 +43,8 @@ Arquivos-chave
 - `src/scenes/OpponentSelectScene.js` — seleção de oponentes e exibição de recompensa em pontos.
 - `src/scenes/CharacterSelectScene.js` — seleção inicial do jogador.
 - `src/data/characters.js` — presets de personagens (player/enemy).
+- `src/data/characters.js` — enum `ENEMY_TIERS` e formações dos inimigos.
+- `src/data/progression.js` — limite da campanha, intervalo e tabela de custos de pagamento.
 
 Próximos passos (priorizados)
 1. Corrigir a UI do `ShopScene` — tornar layout responsivo, melhorar exibição de itens, botões, e feedback de compra/pagamento.

@@ -7,6 +7,38 @@ function pos(file, rank) {
   return { x, y };
 }
 
+export const ENEMY_TIERS = {
+  BASIC: 'BASIC',
+  ADVANCED: 'ADVANCED',
+  BOSS: 'BOSS',
+  BOSS_FINAL: 'BOSS_FINAL',
+  SPECIAL: 'SPECIAL'
+};
+
+export const ENEMY_VALUES = {
+  [ENEMY_TIERS.BASIC]: 6,
+  [ENEMY_TIERS.ADVANCED]: 8,
+  [ENEMY_TIERS.BOSS]: 10,
+  [ENEMY_TIERS.BOSS_FINAL]: 15
+};
+
+function enemyFormation(rows, idPrefix) {
+  const pieces = [];
+  rows.forEach((row, y) => {
+    row.forEach((pieceType, x) => {
+      if (pieceType.toLowerCase() === 'x') return;
+      pieces.push({
+        x,
+        y,
+        pt: pieceType.toLowerCase(),
+        id: `${idPrefix}_${x}_${y}`,
+        hasMoved: false
+      });
+    });
+  });
+  return pieces;
+}
+
 export const playerCharacters = {
   TheSquire: {
     id: 'TheSquire',
@@ -30,6 +62,8 @@ export const enemyCharacters = {
   TheAllRounder: {
     id: 'TheAllRounder',
     displayName: 'The All-Rounder',
+    tier: ENEMY_TIERS.SPECIAL,
+    value: 12,
     // full standard adapted 5x6 setup: back row R N Q K B (lowercase), pawns at rank 5 (y=1)
     pieces: (function(){
       const arr = [];
@@ -38,6 +72,56 @@ export const enemyCharacters = {
       for (let x = 0; x < 5; x++) arr.push({ x, y:1, pt: 'p', id:`e_pawn_${x}`, hasMoved:false });
       return arr;
     })()
+  },
+  ScilianDefender: {
+    id: 'ScilianDefender',
+    displayName: 'Scilian Defender',
+    tier: ENEMY_TIERS.BASIC,
+    value: ENEMY_VALUES[ENEMY_TIERS.BASIC],
+    pieces: enemyFormation([
+      ['x', 'p', 'x', 'p', 'p'],
+      ['x', 'q', 'k', 'x', 'n']
+    ], 'scilian_defender')
+  },
+  FrenchDefender: {
+    id: 'FrenchDefender',
+    displayName: 'French Defender',
+    tier: ENEMY_TIERS.BASIC,
+    value: ENEMY_VALUES[ENEMY_TIERS.BASIC],
+    pieces: enemyFormation([
+      ['x', 'p', 'p', 'p', 'x'],
+      ['x', 'q', 'k', 'x', 'n']
+    ], 'french_defender')
+  },
+  ItalianStarter: {
+    id: 'ItalianStarter',
+    displayName: 'Italian Starter',
+    tier: ENEMY_TIERS.ADVANCED,
+    value: ENEMY_VALUES[ENEMY_TIERS.ADVANCED],
+    pieces: enemyFormation([
+      ['p', 'p', 'p', 'x', 'x'],
+      ['x', 'q', 'k', 'b', 'n']
+    ], 'italian_starter')
+  },
+  ViennaEnjoyer: {
+    id: 'ViennaEnjoyer',
+    displayName: 'Vienna Enjoyer',
+    tier: ENEMY_TIERS.BOSS,
+    value: ENEMY_VALUES[ENEMY_TIERS.BOSS],
+    pieces: enemyFormation([
+      ['x', 'x', 'p', 'p', 'p'],
+      ['n', 'q', 'k', 'b', 'x']
+    ], 'vienna_enjoyer')
+  },
+  QueensGambit: {
+    id: 'QueensGambit',
+    displayName: "Queen's Gambit",
+    tier: ENEMY_TIERS.BOSS_FINAL,
+    value: ENEMY_VALUES[ENEMY_TIERS.BOSS_FINAL],
+    pieces: enemyFormation([
+      ['p', 'p', 'x', 'p', 'p'],
+      ['q', 'q', 'k', 'q', 'q']
+    ], 'queens_gambit')
   }
 };
 

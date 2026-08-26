@@ -4,6 +4,7 @@ import OpponentSelectScene from './scenes/OpponentSelectScene.js';
 import GameScene from './scenes/GameScene.js';
 import ShopScene from './scenes/ShopScene.js';
 import GameOverScene from './scenes/GameOverScene.js';
+import VictoryScene from './scenes/VictoryScene.js';
 
 const config = {
   type: Phaser.CANVAS,
@@ -16,7 +17,7 @@ const config = {
   },
   backgroundColor: '#222',
   pixelArt: true,
-  scene: [MenuScene, CharacterSelectScene, OpponentSelectScene, GameScene, ShopScene, GameOverScene],
+  scene: [MenuScene, CharacterSelectScene, OpponentSelectScene, GameScene, ShopScene, GameOverScene, VictoryScene],
 };
 
 window.game = new Phaser.Game(config);

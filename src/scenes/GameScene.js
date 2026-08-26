@@ -1,5 +1,6 @@
 import chars from '../data/characters.js';
 import { BUFFS_MAP } from '../data/buffs.js';
+import { getPaymentCost, MAX_CAMPAIGN_ROUNDS, PAYMENT_INTERVAL } from '../data/progression.js';
 
 const COLS = 5;
 const ROWS = 6;
@@ -19,10 +20,14 @@ export default class GameScene extends Phaser.Scene {
     this.score = 0;
     // turnRound: in-match turn counter (player+enemy turns). campaignRound: meta progression across matches.
     this.turnRound = 1;
-    this.campaignRound = data && data.round ? data.round : 1;
+    // campaignRound counts completed matches; the first match starts at zero.
+    this.campaignRound = data && Number.isInteger(data.round) ? data.round : 0;
     this.captureValue = 1; // points per capture
-    this.maxRounds = 8; // player has 8 rounds (player+enemy = 1 round)
+    this.maxRounds = 8; // player has 8 turns (player+enemy = 1 match)
     this.turnPhase = 'player'; // 'player' or 'enemy'
+    this.playerMovesThisTurn = 0;
+    this.extraMoveRule = null;
+    this.pathSide = null;
     this.lastMove = null; // { pieceId, fromX, fromY, toX, toY, pieceType }
     // load character selection data from menu (if provided)
     this.playerCharacterId = data && data.playerCharacterId ? data.playerCharacterId : null;
@@ -35,7 +40,7 @@ export default class GameScene extends Phaser.Scene {
     if (data && typeof data.score === 'number') {
       this.score = data.score;
       this.upgrades = data && Array.isArray(data.upgrades) ? data.upgrades.slice() : [];
-      this.campaignRound = data && data.round ? data.round : this.campaignRound;
+      this.campaignRound = data && Number.isInteger(data.round) ? data.round : this.campaignRound;
     } else {
       try {
         const raw = localStorage.getItem('checkito_state');
@@ -43,7 +48,7 @@ export default class GameScene extends Phaser.Scene {
           const s = JSON.parse(raw);
           this.score = typeof s.score === 'number' ? s.score : 0;
           this.upgrades = Array.isArray(s.upgrades) ? s.upgrades.slice() : [];
-          this.campaignRound = s.round || this.campaignRound;
+          this.campaignRound = Number.isInteger(s.round) ? s.round : this.campaignRound;
         } else {
           this.score = 0;
           this.upgrades = [];
@@ -53,7 +58,7 @@ export default class GameScene extends Phaser.Scene {
         this.upgrades = [];
       }
     }
-    this.paymentInterval = data && data.paymentInterval ? data.paymentInterval : 3; // default every 3 rounds
+    this.paymentInterval = data && data.paymentInterval ? data.paymentInterval : PAYMENT_INTERVAL;
   }
 
   create() {
@@ -86,16 +91,62 @@ export default class GameScene extends Phaser.Scene {
    * @returns {number} modified value after applying all buff hooks
    */
   applyBuffHooks(hookName, piece, targetPiece, baseValue) {
-    let result = baseValue;
+    return this.runBuffHooks(hookName, piece, targetPiece, baseValue);
+  }
+
+  runBuffHooks(hookName, piece, targetPiece, value) {
+    let result = value;
     if (!this.upgrades || !Array.isArray(this.upgrades)) return result;
-    
+
     for (const buffId of this.upgrades) {
       const buff = BUFFS_MAP[buffId];
       if (buff && buff.hooks && typeof buff.hooks[hookName] === 'function') {
-        result = buff.hooks[hookName](this, piece, targetPiece, result);
+        const hookResult = buff.hooks[hookName](this, piece, targetPiece, result);
+        if (hookResult !== undefined && hookResult !== null) result = hookResult;
       }
     }
     return result;
+  }
+
+  canPassThrough(piece, blockingPiece, side) {
+    const previousSide = this.pathSide;
+    this.pathSide = side;
+    const result = this.runBuffHooks('onPathBlocked', piece, blockingPiece, false);
+    this.pathSide = previousSide;
+    return result === true;
+  }
+
+  awardCapturePoints(piece, targetPiece, side) {
+    const capType = (targetPiece.pt || 'P').toUpperCase();
+    const values = { P: 1, N: 3, B: 3, R: 5, Q: 8, K: 10 };
+    const baseValue = side === 'player'
+      ? (capType === 'K' ? (this.enemyCharacterConfig && this.enemyCharacterConfig.value) || values.K : values[capType] || 1)
+      : 0;
+    const previousSide = this.captureSide;
+    this.captureSide = side;
+    const gain = this.applyBuffHooks('onCapture', piece, targetPiece, baseValue);
+    this.captureSide = previousSide;
+    if (side === 'player') this.score += gain;
+    if (this.scoreText) this.scoreText.setText(`Pontuação: ${this.score}`);
+  }
+
+  continueOrEndPlayerTurn(piece) {
+    const moveEffect = this.runBuffHooks('onMove', piece, null, this.playerMovesThisTurn);
+    if (moveEffect && moveEffect.keepTurn) {
+      this.extraMoveRule = {
+        allowedPieceId: moveEffect.allowedPieceId || null,
+        excludedPieceId: moveEffect.excludedPieceId || null
+      };
+      this.turnPhase = 'player';
+      this.turnText.setText('Turno: Jogador');
+      return;
+    }
+
+    this.extraMoveRule = null;
+    this.playerMovesThisTurn = 0;
+    this.turnPhase = 'enemy';
+    this.turnText.setText('Turno: Inimigo');
+    this.time.delayedCall(300, () => this.startEnemyTurn());
   }
 
   preload() {
@@ -315,16 +366,16 @@ export default class GameScene extends Phaser.Scene {
 
     if (pt === 'R') {
       if (dx !== 0 && dy !== 0) return false;
-      return this.isPathClearBoard(piece.x, piece.y, toX, toY, playerArr, enemyArr);
+      return this.isPathClearBoard(piece.x, piece.y, toX, toY, playerArr, enemyArr, isEnemy ? 'enemy' : 'player');
     }
 
     if (pt === 'B') {
       if (adx !== ady) return false;
-      return this.isPathClearBoard(piece.x, piece.y, toX, toY, playerArr, enemyArr);
+      return this.isPathClearBoard(piece.x, piece.y, toX, toY, playerArr, enemyArr, isEnemy ? 'enemy' : 'player');
     }
 
     if (pt === 'Q') {
-      if (dx === 0 || dy === 0 || adx === ady) return this.isPathClearBoard(piece.x, piece.y, toX, toY, playerArr, enemyArr);
+      if (dx === 0 || dy === 0 || adx === ady) return this.isPathClearBoard(piece.x, piece.y, toX, toY, playerArr, enemyArr, isEnemy ? 'enemy' : 'player');
       return false;
     }
 
@@ -357,13 +408,14 @@ export default class GameScene extends Phaser.Scene {
     return false;
   }
 
-  isPathClearBoard(fromX, fromY, toX, toY, playerArr, enemyArr) {
+  isPathClearBoard(fromX, fromY, toX, toY, playerArr, enemyArr, side) {
     const dx = Math.sign(toX - fromX);
     const dy = Math.sign(toY - fromY);
     let cx = fromX + dx;
     let cy = fromY + dy;
     while (cx !== toX || cy !== toY) {
-      if (this.getPieceAtFromArrays(cx, cy, playerArr, enemyArr)) return false;
+      const blocker = this.getPieceAtFromArrays(cx, cy, playerArr, enemyArr);
+      if (blocker && !this.canPassThrough({ x: fromX, y: fromY, pt: 'B' }, blocker.piece, side)) return false;
       cx += dx;
       cy += dy;
     }
@@ -394,13 +446,8 @@ export default class GameScene extends Phaser.Scene {
             if (capturedPlayer) Phaser.Utils.Array.Remove(this.playerPieces, capturedPlayer);
             // award points if player captured enemy by en-passant
             if (side === 'player') {
-              const values = { P:1, N:3, B:3, R:5, Q:8, K:10 };
               const capturedPiece = captured || capturedPlayer;
-              let gain = values['P']; // pawn value
-              // apply buff hooks
-              gain = this.applyBuffHooks('onCapture', piece, capturedPiece, gain);
-              this.score += gain;
-              if (this.scoreText) this.scoreText.setText(`Pontuação: ${this.score}`);
+              this.awardCapturePoints(piece, capturedPiece, side);
             }
           }
         }
@@ -430,13 +477,9 @@ export default class GameScene extends Phaser.Scene {
       if (target.side === 'player') Phaser.Utils.Array.Remove(this.playerPieces, target.piece);
       // award points if player captures enemy
       if (side === 'player' && target.side === 'enemy') {
-        const capType = (target.piece.pt || 'P').toUpperCase();
-        const values = { P:1, N:3, B:3, R:5, Q:8, K:10 };
-        let gain = values[capType] || 1;
-        // apply buff hooks
-        gain = this.applyBuffHooks('onCapture', piece, target.piece, gain);
-        this.score += gain;
-        if (this.scoreText) this.scoreText.setText(`Pontuação: ${this.score}`);
+        this.awardCapturePoints(piece, target.piece, side);
+      } else if (side === 'enemy' && target.side === 'player') {
+        this.awardCapturePoints(piece, target.piece, side);
       }
     }
 
@@ -560,10 +603,8 @@ export default class GameScene extends Phaser.Scene {
     }
     this.refreshBoard();
 
-    // after promotion selection, proceed to enemy turn
-    this.turnPhase = 'enemy';
-    this.turnText.setText('Turno: Inimigo');
-    this.time.delayedCall(300, () => this.startEnemyTurn());
+    // After promotion selection, continue the current player-turn hook flow.
+    if (p) this.continueOrEndPlayerTurn(p);
   }
 
   tileToPixel(tx, ty) {
@@ -588,6 +629,10 @@ export default class GameScene extends Phaser.Scene {
     const found = this.getPieceAt(x, y);
 
     if (found && found.side === 'player') {
+      if (this.extraMoveRule) {
+        if (this.extraMoveRule.allowedPieceId && found.piece.id !== this.extraMoveRule.allowedPieceId) return;
+        if (this.extraMoveRule.excludedPieceId && found.piece.id === this.extraMoveRule.excludedPieceId) return;
+      }
       // select player's piece
       this.selected = found.piece;
       this.showHighlightsFor(this.selected);
@@ -607,6 +652,7 @@ export default class GameScene extends Phaser.Scene {
 
         // apply move (handles en passant, castling, promotion)
         this.applyMove(from, x, y, 'player');
+        this.playerMovesThisTurn++;
         this.selected = null;
         this.clearHighlights();
         this.selectionGraphics.clear();
@@ -615,9 +661,7 @@ export default class GameScene extends Phaser.Scene {
 
         // after player move, if promotion pending we wait for player choice
         if (!this.promotionPending) {
-          this.turnPhase = 'enemy';
-          this.turnText.setText('Turno: Inimigo');
-          this.time.delayedCall(300, () => this.startEnemyTurn());
+          this.continueOrEndPlayerTurn(from);
         }
       } else {
         // invalid move: deselect
@@ -686,20 +730,35 @@ export default class GameScene extends Phaser.Scene {
 
     // if match end conditions met (enemy defeated or turn limit reached), go to shop (end of match)
     if (this.enemyPieces.length === 0 || this.turnRound > this.maxRounds) {
-      // increment campaign round and decide payment based on campaignRound
+      // Increment the campaign round and charge checkpoints after the match.
       this.campaignRound++;
-      const paymentRequired = (this.paymentInterval > 0) && ((this.campaignRound % this.paymentInterval) === 0);
+      const paymentCost = this.paymentInterval === PAYMENT_INTERVAL ? getPaymentCost(this.campaignRound) : 0;
+      if (paymentCost > 0) {
+        if (this.score < paymentCost) {
+          this.scene.start('GameOverScene', { score: this.score, round: this.campaignRound });
+          return;
+        }
+        this.score -= paymentCost;
+        if (this.scoreText) this.scoreText.setText(`Pontuação: ${this.score}`);
+      }
+
+      if (this.campaignRound >= MAX_CAMPAIGN_ROUNDS) {
+        this.scene.start('VictoryScene', { score: this.score, round: this.campaignRound });
+        return;
+      }
+
       this.scene.start('ShopScene', {
         playerCharacterId: this.playerCharacterId,
         round: this.campaignRound,
         score: this.score,
-        upgrades: this.upgrades,
-        paymentRequired
+        upgrades: this.upgrades
       });
       return;
     }
 
     // otherwise continue to player's turn
+    this.playerMovesThisTurn = 0;
+    this.extraMoveRule = null;
     this.turnPhase = 'player';
     this.turnText.setText('Turno: Jogador');
   }
@@ -754,16 +813,16 @@ export default class GameScene extends Phaser.Scene {
 
     if (pt === 'R') {
       if (dx !== 0 && dy !== 0) return false;
-      return this.isPathClear(piece.x, piece.y, toX, toY);
+      return this.isPathClear(piece.x, piece.y, toX, toY, piece);
     }
 
     if (pt === 'B') {
       if (adx !== ady) return false;
-      return this.isPathClear(piece.x, piece.y, toX, toY);
+      return this.isPathClear(piece.x, piece.y, toX, toY, piece);
     }
 
     if (pt === 'Q') {
-      if (dx === 0 || dy === 0 || adx === ady) return this.isPathClear(piece.x, piece.y, toX, toY);
+      if (dx === 0 || dy === 0 || adx === ady) return this.isPathClear(piece.x, piece.y, toX, toY, piece);
       return false;
     }
 
@@ -797,13 +856,15 @@ export default class GameScene extends Phaser.Scene {
   }
 
   // check if straight/diagonal path between from and to is clear (excluding endpoints)
-  isPathClear(fromX, fromY, toX, toY) {
+  isPathClear(fromX, fromY, toX, toY, movingPiece) {
+    const side = this.isEnemyPiece(movingPiece) ? 'enemy' : 'player';
     const dx = Math.sign(toX - fromX);
     const dy = Math.sign(toY - fromY);
     let cx = fromX + dx;
     let cy = fromY + dy;
     while (cx !== toX || cy !== toY) {
-      if (this.getPieceAt(cx, cy)) return false;
+      const blocker = this.getPieceAt(cx, cy);
+      if (blocker && !this.canPassThrough(movingPiece, blocker.piece, side)) return false;
       cx += dx;
       cy += dy;
     }

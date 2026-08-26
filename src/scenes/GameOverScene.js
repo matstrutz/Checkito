@@ -18,7 +18,8 @@ export default class GameOverScene extends Phaser.Scene {
     const restart = this.add.text(width / 2, height / 2 + 80, 'Reiniciar', { fontSize: '20px', color: '#0f0' }).setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
     restart.on('pointerup', () => {
-      this.scene.start('GameScene');
+      try { localStorage.removeItem('checkito_state'); } catch (e) {}
+      this.scene.start('MenuScene');
     });
   }
 }

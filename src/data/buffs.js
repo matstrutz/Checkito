@@ -55,25 +55,86 @@ export const BUFFS = [
       })
     }
   },
-  // Placeholder para futuros buffs
-  /*
   {
-    id: 'knight_mastery',
-    name: 'Knight Mastery',
-    description: 'Capturas de Cavalo geram +2 pontos adicionais',
-    rarity: BUFF_RARITIES.UNCOMMON,
-    price: 20,
+    id: 'worth_challenger',
+    name: 'Worth Challenger',
+    description: 'Suas capturas de rei geram mais 2 pontos de recompensa',
+    rarity: BUFF_RARITIES.COMMON,
+    price: 8,
     hooks: {
       onCapture: (gameScene, piece, targetPiece, baseValue) => {
-        const attackerIsKnight = (piece.pt || '').toUpperCase() === 'N';
-        if (attackerIsKnight) {
+        if (gameScene.captureSide === 'player' && (targetPiece.pt || '').toUpperCase() === 'K') {
           return baseValue + 2;
         }
         return baseValue;
       }
     }
   },
-  */
+  {
+    id: 'double_pawns',
+    name: 'Double Pawns',
+    description: 'No seu primeiro turno, até 2 peões diferentes podem ser movidos',
+    rarity: BUFF_RARITIES.UNCOMMON,
+    price: 8,
+    hooks: {
+      onMove: (gameScene, piece, moveNumber) => {
+        if (gameScene.turnRound === 1 && moveNumber === 1 && (piece.pt || '').toUpperCase() === 'P') {
+          return { keepTurn: true, excludedPieceId: piece.id };
+        }
+        return null;
+      }
+    }
+  },
+  {
+    id: 'double_jump',
+    name: 'Double Jump',
+    description: 'No seu primeiro turno, seu cavalo pode se mover até 2 vezes seguidas',
+    rarity: BUFF_RARITIES.RARE,
+    price: 8,
+    hooks: {
+      onMove: (gameScene, piece, moveNumber) => {
+        if (gameScene.turnRound === 1 && moveNumber === 1 && (piece.pt || '').toUpperCase() === 'N') {
+          return { keepTurn: true, allowedPieceId: piece.id };
+        }
+        return null;
+      }
+    }
+  },
+  {
+    id: 'ghost_bishops',
+    name: 'Ghost Bishops',
+    description: 'Seu bispo pode atravessar peças aliadas',
+    rarity: BUFF_RARITIES.RARE,
+    price: 12,
+    hooks: {
+      onPathBlocked: (gameScene, movingPiece, blockingPiece) => {
+        const isPlayerBishop = gameScene.pathSide === 'player'
+          && (movingPiece.pt || '').toUpperCase() === 'B';
+        const isAlly = gameScene.pathSide === 'player' && blockingPiece;
+        return isPlayerBishop && isAlly;
+      }
+    }
+  },
+  {
+    id: 'honorable_sacrifice',
+    name: 'Honorable Sacrifice',
+    description: 'Quando uma rainha captura um de seus peões, você ganha 1 ponto',
+    rarity: BUFF_RARITIES.COMMON,
+    price: 10,
+    hooks: {
+      onCapture: (gameScene, piece, targetPiece, baseValue) => {
+        const enemyQueen = gameScene.captureSide === 'enemy'
+          && (piece.pt || '').toUpperCase() === 'Q';
+        const playerPawn = gameScene.captureSide === 'enemy'
+          && (targetPiece.pt || '').toUpperCase() === 'P';
+        if (enemyQueen && playerPawn) {
+          gameScene.score += 1;
+          if (gameScene.scoreText) gameScene.scoreText.setText(`Pontuação: ${gameScene.score}`);
+        }
+        return baseValue;
+      }
+    }
+  }
 ];
 
 // Mapa de ID -> Buff para acesso rápido

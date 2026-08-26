@@ -1,4 +1,4 @@
-import { BUFF_RARITIES, getShopBuffs } from '../data/buffs.js';
+import { BUFF_RARITIES, BUFFS_MAP, getShopBuffs } from '../data/buffs.js';
 
 export default class ShopScene extends Phaser.Scene {
   constructor() { super({ key: 'ShopScene' }); }
@@ -9,8 +9,6 @@ export default class ShopScene extends Phaser.Scene {
     this.round = data && data.round ? data.round : 1;
     this.score = data && (typeof data.score === 'number') ? data.score : 0;
     this.upgrades = data && Array.isArray(data.upgrades) ? data.upgrades.slice() : [];
-    this.paymentRequired = !!(data && data.paymentRequired);
-    this.paymentPaid = false;
   }
 
   create() {
@@ -19,7 +17,7 @@ export default class ShopScene extends Phaser.Scene {
     const margin = Math.max(12, Math.min(24, Math.floor(width * 0.03)));
     const gap = 12;
     const sidebarW = compact ? width - margin * 2 : Math.min(220, Math.floor(width * 0.26));
-    const sidebarH = compact && this.paymentRequired ? 150 : compact ? 92 : height - margin * 2;
+    const sidebarH = compact ? 92 : height - margin * 2;
     const mainX = compact ? margin : margin + sidebarW + gap;
     const mainY = compact ? margin + sidebarH + gap : margin;
     const mainW = compact ? width - margin * 2 : width - mainX - margin;
@@ -100,19 +98,6 @@ export default class ShopScene extends Phaser.Scene {
     this.add.text(proceedX, proceedY, 'Prosseguir', { fontSize: compact ? '16px' : '18px', color: '#fff' }).setOrigin(0.5);
     btn.on('pointerup', () => this.onProceed());
 
-    // non-blocking payment panel (shows when payment required)
-    this.paymentCost = 20;
-    if (this.paymentRequired) {
-      const payX = margin + 12;
-      const payY = compact ? margin + 94 : margin + 96;
-      const payW = sidebarW - 24;
-      this.paymentPanelBg = this.add.rectangle(payX, payY, payW, 48, 0x2b2f33).setOrigin(0).setStrokeStyle(1, 0x444);
-      this.paymentPanelText = this.add.text(payX + 8, payY + 6, `Taxa: ${this.paymentCost} pontos`, {
-        fontSize: compact ? '12px' : '14px', color: '#fff', wordWrap: { width: payW - 16 }
-      });
-      this.paymentBtn = this.add.text(payX + 8, payY + 27, 'Pagar agora', { fontSize: '13px', color: '#0f0' }).setInteractive({ useHandCursor: true });
-      this.paymentBtn.on('pointerup', () => this.attemptPayment());
-    }
   }
 
   buyBuff(buff) {
@@ -131,7 +116,7 @@ export default class ShopScene extends Phaser.Scene {
       if (this.scoreText) this.scoreText.setText(`Pontuação: ${this.score}`);
       // Display active upgrades using buff names (need to resolve IDs to names)
       const upgradeNames = this.upgrades.map(id => {
-        const b = this.shopItems.find(item => item.id === id);
+        const b = BUFFS_MAP[id];
         return b ? b.name : id;
       });
       this.upgradesText.setText(upgradeNames.join(', '));
@@ -144,12 +129,7 @@ export default class ShopScene extends Phaser.Scene {
   }
 
   onProceed() {
-    // block if payment is required and not paid yet
-    if (this.paymentRequired && !this.paymentPaid) {
-      if (this.paymentPanelBg) this.tweens.add({ targets: this.paymentPanelBg, alpha: 0.5, yoyo: true, duration: 200 });
-      return;
-    }
-    console.log('[ShopScene] onProceed: score=', this.score, 'round=', this.round, 'paymentRequired=', this.paymentRequired, 'paymentPaid=', this.paymentPaid);
+    console.log('[ShopScene] onProceed: score=', this.score, 'round=', this.round);
     // persist current progression state to localStorage so other scenes can pick it up
     try {
       const s = { score: this.score, upgrades: this.upgrades, round: this.round, playerCharacterId: this.playerCharacterId };
@@ -166,18 +146,4 @@ export default class ShopScene extends Phaser.Scene {
     });
   }
 
-  attemptPayment() {
-    // placeholder: try deducting a fixed cost
-    const cost = this.paymentCost || 20;
-    console.log('[ShopScene] attemptPayment: score=', this.score, 'cost=', cost);
-    if (this.score >= cost) {
-      this.score -= cost;
-      if (this.scoreText) this.scoreText.setText(`Pontuação: ${this.score}`);
-      this.paymentPaid = true;
-      if (this.paymentPanelText) this.paymentPanelText.setText('Taxa paga');
-    } else {
-      // game over: not enough points
-      this.scene.start('GameOverScene', { score: this.score, round: this.round });
-    }
-  }
 }

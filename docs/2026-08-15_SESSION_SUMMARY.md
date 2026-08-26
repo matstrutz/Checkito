@@ -13,6 +13,7 @@ This document summarizes the work done during the coding session on 2026-08-15.
 - Persisted progression state in `localStorage` as `checkito_state` with shape { score, upgrades, round, playerCharacterId }.
 - Restored and standardized capture reward values; opponent card reward shows king-capture value.
 - Hardened rendering code to avoid Phaser group destruction errors and added texture fallbacks to prevent crashes when assets are missing.
+- Added a finite campaign: 30 completed rounds lead to `VictoryScene`; payment checkpoints use configurable costs for rounds 3 through 30.
 
 ## Files changed / added (important)
 - Modified: `src/scenes/GameScene.js` — main game logic and many fixes.
