@@ -108,10 +108,12 @@ export const BUFFS = [
     price: 12,
     hooks: {
       onPathBlocked: (gameScene, movingPiece, blockingPiece) => {
-        const isPlayerBishop = gameScene.pathSide === 'player'
-          && (movingPiece.pt || '').toUpperCase() === 'B';
-        const isAlly = gameScene.pathSide === 'player' && blockingPiece;
-        return isPlayerBishop && isAlly;
+        const pathSide = gameScene.pathSide;
+        const isPlayerBishop = pathSide === 'player' && (movingPiece.pt || '').toUpperCase() === 'B';
+        const blockingSide = blockingPiece && typeof blockingPiece.x === 'number' && typeof blockingPiece.y === 'number'
+          ? gameScene.getPieceAt(blockingPiece.x, blockingPiece.y)?.side || null
+          : null;
+        return isPlayerBishop && blockingSide === 'player';
       }
     }
   },
