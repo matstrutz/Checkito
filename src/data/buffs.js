@@ -26,6 +26,7 @@ export const BUFFS = [
     id: 'pawns_game',
     name: "Pawn's Game",
     description: 'Capturar um peão com seu peão gera +1 ponto adicional',
+    icon: 'circle',
     rarity: BUFF_RARITIES.COMMON,
     price: 10,
     hooks: {
@@ -44,6 +45,7 @@ export const BUFFS = [
     id: 'luck_move',
     name: 'Luck Move',
     description: 'Aumenta a chance de aprimoramentos mais raros aparecerem',
+    icon: 'circle',
     rarity: BUFF_RARITIES.UNCOMMON,
     price: 20,
     hooks: {
@@ -59,6 +61,7 @@ export const BUFFS = [
     id: 'worth_challenger',
     name: 'Worth Challenger',
     description: 'Os reis que voce captura geram mais 3 pontos',
+    icon: 'circle',
     rarity: BUFF_RARITIES.COMMON,
     price: 8,
     hooks: {
@@ -74,11 +77,13 @@ export const BUFFS = [
     id: 'double_pawns',
     name: 'Double Pawns',
     description: 'No seu primeiro turno, até 2 peões diferentes podem ser movidos',
+    icon: 'circle',
     rarity: BUFF_RARITIES.UNCOMMON,
     price: 8,
     hooks: {
       onMove: (gameScene, piece, moveNumber) => {
-        if (gameScene.turnRound === 1 && moveNumber === 1 && (piece.pt || '').toUpperCase() === 'P') {
+        const isFirstMove = typeof moveNumber === 'number' && moveNumber === 0;
+        if (gameScene.turnRound === 1 && isFirstMove && (piece.pt || '').toUpperCase() === 'P') {
           return { keepTurn: true, excludedPieceId: piece.id };
         }
         return null;
@@ -89,11 +94,13 @@ export const BUFFS = [
     id: 'double_jump',
     name: 'Double Jump',
     description: 'No seu primeiro turno, seu cavalo pode se mover até 2 vezes seguidas',
+    icon: 'circle',
     rarity: BUFF_RARITIES.RARE,
     price: 8,
     hooks: {
       onMove: (gameScene, piece, moveNumber) => {
-        if (gameScene.turnRound === 1 && moveNumber === 1 && (piece.pt || '').toUpperCase() === 'N') {
+        const isFirstMove = typeof moveNumber === 'number' && moveNumber === 0;
+        if (gameScene.turnRound === 1 && isFirstMove && (piece.pt || '').toUpperCase() === 'N') {
           return { keepTurn: true, allowedPieceId: piece.id };
         }
         return null;
@@ -104,6 +111,7 @@ export const BUFFS = [
     id: 'ghost_bishops',
     name: 'Ghost Bishops',
     description: 'Seu bispo pode atravessar peças aliadas',
+    icon: 'circle',
     rarity: BUFF_RARITIES.RARE,
     price: 12,
     hooks: {
@@ -121,6 +129,7 @@ export const BUFFS = [
     id: 'honorable_sacrifice',
     name: 'Honorable Sacrifice',
     description: 'Quando uma rainha captura um de seus peões, você ganha 1 ponto',
+    icon: 'circle',
     rarity: BUFF_RARITIES.COMMON,
     price: 10,
     hooks: {

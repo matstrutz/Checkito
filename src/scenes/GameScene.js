@@ -101,8 +101,23 @@ export default class GameScene extends Phaser.Scene {
     for (const buffId of this.upgrades) {
       const buff = BUFFS_MAP[buffId];
       if (buff && buff.hooks && typeof buff.hooks[hookName] === 'function') {
-        const hookResult = buff.hooks[hookName](this, piece, targetPiece, result);
-        if (hookResult !== undefined && hookResult !== null) result = hookResult;
+        let hookResult;
+
+        if (hookName === 'onMove') {
+          hookResult = buff.hooks[hookName](this, piece, result);
+        } else if (hookName === 'onPathBlocked') {
+          hookResult = buff.hooks[hookName](this, piece, targetPiece);
+        } else {
+          hookResult = buff.hooks[hookName](this, piece, targetPiece, result);
+        }
+
+        if (hookResult !== undefined && hookResult !== null) {
+          if (result && typeof result === 'object' && hookResult && typeof hookResult === 'object') {
+            result = { ...result, ...hookResult };
+          } else {
+            result = hookResult;
+          }
+        }
       }
     }
     return result;
@@ -130,9 +145,17 @@ export default class GameScene extends Phaser.Scene {
     if (this.scoreText) this.scoreText.setText(`Pontuação: ${this.score}`);
   }
 
-  continueOrEndPlayerTurn(piece) {
-    const moveNumber = this.playerMovesThisTurn;
+  continueOrEndPlayerTurn(piece, moveNumber = this.playerMovesThisTurn) {
     const moveEffect = this.runBuffHooks('onMove', piece, null, moveNumber);
+    console.log('[GameScene] continueOrEndPlayerTurn', {
+      pieceId: piece && piece.id,
+      pieceType: piece && (piece.pt || '').toUpperCase(),
+      moveNumber,
+      playerMovesThisTurn: this.playerMovesThisTurn,
+      turnRound: this.turnRound,
+      extraMoveRule: this.extraMoveRule,
+      moveEffect
+    });
     if (moveEffect && moveEffect.keepTurn) {
       this.extraMoveRule = {
         allowedPieceId: moveEffect.allowedPieceId || null,
@@ -574,7 +597,8 @@ export default class GameScene extends Phaser.Scene {
     bg.setStrokeStyle(2, 0xffffff);
     this.promoGroup.add(bg);
 
-    this.add.text(width/2, y + 20, 'Escolha promoção', { fontSize: '20px', color: '#fff' }).setOrigin(0.5);
+    const title = this.add.text(width/2, y + 20, 'Escolha promoção', { fontSize: '20px', color: '#fff' }).setOrigin(0.5);
+    this.promoGroup.add(title);
 
     const options = ['Q','R','B','N'];
     const btnW = 60;
@@ -648,12 +672,19 @@ export default class GameScene extends Phaser.Scene {
     if (this.selected) {
       // attempt move from selected to (x,y)
       const from = this.selected;
+      if (this.extraMoveRule) {
+        console.log('[GameScene] extraMoveRule active', this.extraMoveRule, {
+          selectedId: from && from.id,
+          selectedType: from && (from.pt || '').toUpperCase()
+        });
+      }
       if (this.canMove(from, x, y) && !this.moveLeavesKingInCheckForSide(from, x, y, 'player')) {
         // captures handled inside applyMove
 
         // apply move (handles en passant, castling, promotion)
         this.applyMove(from, x, y, 'player');
-        this.playerMovesThisTurn++;
+        const moveNumberBeforeTurnCheck = this.playerMovesThisTurn;
+        this.playerMovesThisTurn += 1;
         this.selected = null;
         this.clearHighlights();
         this.selectionGraphics.clear();
@@ -662,7 +693,7 @@ export default class GameScene extends Phaser.Scene {
 
         // after player move, if promotion pending we wait for player choice
         if (!this.promotionPending) {
-          this.continueOrEndPlayerTurn(from);
+          this.continueOrEndPlayerTurn(from, moveNumberBeforeTurnCheck);
         }
       } else {
         // invalid move: deselect
