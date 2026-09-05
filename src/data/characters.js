@@ -65,14 +65,10 @@ export const enemyCharacters = {
     displayName: 'The All-Rounder',
     tier: ENEMY_TIERS.SPECIAL,
     value: 12,
-    // full standard adapted 5x6 setup: back row R N Q K B (lowercase), pawns at rank 5 (y=1)
-    pieces: (function(){
-      const arr = [];
-      const back = ['r','n','q','k','b'];
-      for (let x = 0; x < 5; x++) arr.push({ x, y:0, pt: back[x], id:`e_back_${x}`, hasMoved:false });
-      for (let x = 0; x < 5; x++) arr.push({ x, y:1, pt: 'p', id:`e_pawn_${x}`, hasMoved:false });
-      return arr;
-    })()
+    pieces: enemyFormation([
+      ['r', 'n', 'q', 'k', 'b'],
+      ['p', 'p', 'p', 'p', 'p']
+    ], 'the_all_rounder')
   },
   ScilianDefender: {
     id: 'ScilianDefender',

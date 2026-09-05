@@ -5,11 +5,12 @@ export default class ShopScene extends Phaser.Scene {
   constructor() { super({ key: 'ShopScene' }); }
 
   init(data) {
-    // data can include playerCharacterId, round, score, upgrades
+    // data can include playerCharacterId, round, score, upgrades and shopItemIds
     this.playerCharacterId = data && data.playerCharacterId ? data.playerCharacterId : null;
     this.round = data && data.round ? data.round : 1;
     this.score = data && (typeof data.score === 'number') ? data.score : 0;
     this.upgrades = data && Array.isArray(data.upgrades) ? data.upgrades.slice() : [];
+    this.shopItemIds = data && Array.isArray(data.shopItemIds) ? data.shopItemIds.slice() : null;
   }
 
   createBuffTooltip(buff, target) {
@@ -57,21 +58,22 @@ export default class ShopScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const compact = width < 700;
     const margin = Math.max(12, Math.min(24, Math.floor(width * 0.03)));
-    const gap = 12;
-    const sidebarW = compact ? width - margin * 2 : Math.min(220, Math.floor(width * 0.26));
-    const sidebarH = compact ? 92 : height - margin * 2;
+    const gap = 10;
+    const sidebarW = compact ? width - margin * 2 : Math.min(376, Math.max(180, Math.floor(width * 0.196)));
+    const sidebarH = compact ? 272 : height - margin * 2;
     const mainX = compact ? margin : margin + sidebarW + gap;
     const mainY = compact ? margin + sidebarH + gap : margin;
     const mainW = compact ? width - margin * 2 : width - mainX - margin;
     const mainH = height - mainY - margin;
     const panelTextWidth = Math.max(100, sidebarW - 24);
+    const topH = compact ? 84 : Math.min(174, Math.max(100, Math.floor(height * 0.161)));
     const nextPaymentRound = this.getNextPaymentRound();
     const roundsUntilPayment = nextPaymentRound ? nextPaymentRound - this.round : 0;
 
     // background
     this.add.rectangle(0, 0, width, height, 0x121418).setOrigin(0);
 
-    const sidebarInfoH = compact ? 110 : 170;
+    const sidebarInfoH = compact ? 110 : topH;
     const sidebarAugmentsH = Math.max(150, sidebarH - sidebarInfoH - 12);
 
     // Game name + information panel
@@ -132,15 +134,8 @@ export default class ShopScene extends Phaser.Scene {
       this.createBuffTooltip(buff, icon);
     });
 
-    // top area: active upgrades
-    const topH = compact ? 84 : 80;
+    // Reserved card for a future feature.
     this.add.rectangle(mainX, mainY, mainW, topH, 0x1b1f23).setOrigin(0).setStrokeStyle(1, 0x333);
-    this.add.text(mainX + 12, mainY + 10, 'Upgrades Ativos:', { fontSize: compact ? '14px' : '16px', color: '#fff' });
-    this.upgradesText = this.add.text(mainX + 12, mainY + 34, this.upgrades.join(', ') || 'Nenhum', {
-      fontSize: compact ? '12px' : '14px', color: '#ccc',
-      wordWrap: { width: Math.max(120, mainW - 24) },
-      maxLines: 2
-    });
 
     // center: shop items
     const itemsAreaY = mainY + topH + 12;
@@ -149,8 +144,10 @@ export default class ShopScene extends Phaser.Scene {
     this.add.rectangle(mainX, itemsAreaY, mainW, itemsAreaH, 0x141619).setOrigin(0).setStrokeStyle(1, 0x333);
     this.add.text(mainX + 12, itemsAreaY + 8, 'Loja', { fontSize: compact ? '16px' : '18px', color: '#fff' });
 
-    // Generate offers from the rarity table and hide buffs already owned.
-    this.shopItems = getShopBuffs(this.upgrades, 3);
+    // Generate offers once per shop visit; a purchase restart reuses the remaining offers.
+    this.shopItems = this.shopItemIds
+      ? this.shopItemIds.map(id => BUFFS_MAP[id]).filter(buff => buff && !this.upgrades.includes(buff.id))
+      : getShopBuffs(this.upgrades, 3);
 
     const cardGap = 8;
     const cardX = mainX + 12;
@@ -210,11 +207,15 @@ export default class ShopScene extends Phaser.Scene {
       this.score -= buff.price;
       // Add buff ID to upgrades (will be applied in GameScene)
       this.upgrades.push(buff.id);
+      const remainingShopItemIds = this.shopItems
+        .map(item => item.id)
+        .filter(id => id !== buff.id);
       this.scene.restart({
         playerCharacterId: this.playerCharacterId,
         score: this.score,
         upgrades: this.upgrades,
-        round: this.round
+        round: this.round,
+        shopItemIds: remainingShopItemIds
       });
     } else {
       // insufficient points — visual feedback

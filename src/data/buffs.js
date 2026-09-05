@@ -15,29 +15,22 @@ export const SHOP_RARITY_WEIGHTS = {
 };
 
 /**
- * Definição de buffs disponíveis
- * Cada buff tem: id, name, description, rarity, price, hooks
- * 
- * Hooks são callbacks que modificam comportamento do jogo:
- * - onCapture(gameScene, piece, targetPiece, baseValue) => newValue
+ * Definicao de buffs disponiveis.
+ * Cada buff tem: id, name, description, icon, rarity, price, hooks.
  */
 export const BUFFS = [
   {
     id: 'pawns_game',
     name: "Pawn's Game",
-    description: 'Capturar um peão com seu peão gera +1 ponto adicional',
+    description: 'Capturar um peao com seu peao gera +1 ponto adicional',
     icon: 'circle',
     rarity: BUFF_RARITIES.COMMON,
     price: 10,
     hooks: {
       onCapture: (gameScene, piece, targetPiece, baseValue) => {
-        // Se o atacante é um peão e o alvo também é um peão, +1
         const attackerIsPawn = (piece.pt || '').toUpperCase() === 'P';
         const targetIsPawn = (targetPiece.pt || '').toUpperCase() === 'P';
-        if (attackerIsPawn && targetIsPawn) {
-          return baseValue + 1;
-        }
-        return baseValue;
+        return attackerIsPawn && targetIsPawn ? baseValue + 1 : baseValue;
       }
     }
   },
@@ -60,15 +53,13 @@ export const BUFFS = [
   {
     id: 'worth_challenger',
     name: 'Worth Challenger',
-    description: 'Os reis que voce captura geram mais 3 pontos',
+    description: 'Capturar o rei inimigo concede o dobro dos pontos',
     icon: 'circle',
     rarity: BUFF_RARITIES.COMMON,
     price: 8,
     hooks: {
       onCapture: (gameScene, piece, targetPiece, baseValue) => {
-        if (gameScene.captureSide === 'player' && (targetPiece.pt || '').toUpperCase() === 'K') {
-          return baseValue + 3;
-        }
+        if (gameScene.captureSide === 'player' && (targetPiece.pt || '').toUpperCase() === 'K') return baseValue * 2;
         return baseValue;
       }
     }
@@ -76,7 +67,7 @@ export const BUFFS = [
   {
     id: 'double_pawns',
     name: 'Double Pawns',
-    description: 'No seu primeiro turno, até 2 peões diferentes podem ser movidos',
+    description: 'No seu primeiro turno, ate 2 peoes diferentes podem ser movidos',
     icon: 'circle',
     rarity: BUFF_RARITIES.UNCOMMON,
     price: 8,
@@ -93,7 +84,7 @@ export const BUFFS = [
   {
     id: 'double_jump',
     name: 'Double Jump',
-    description: 'No seu primeiro turno, seu cavalo pode se mover até 2 vezes seguidas',
+    description: 'No seu primeiro turno, seu cavalo pode se mover ate 2 vezes seguidas',
     icon: 'circle',
     rarity: BUFF_RARITIES.RARE,
     price: 8,
@@ -110,7 +101,7 @@ export const BUFFS = [
   {
     id: 'ghost_bishops',
     name: 'Ghost Bishops',
-    description: 'Seu bispo pode atravessar peças aliadas',
+    description: 'Seu bispo pode atravessar pecas aliadas',
     icon: 'circle',
     rarity: BUFF_RARITIES.RARE,
     price: 12,
@@ -128,64 +119,173 @@ export const BUFFS = [
   {
     id: 'honorable_sacrifice',
     name: 'Honorable Sacrifice',
-    description: 'Quando uma rainha captura um de seus peões, você ganha 1 ponto',
+    description: 'Quando uma rainha captura um de seus peoes, voce ganha 1 ponto',
     icon: 'circle',
     rarity: BUFF_RARITIES.COMMON,
     price: 10,
     hooks: {
       onCapture: (gameScene, piece, targetPiece, baseValue) => {
-        const enemyQueen = gameScene.captureSide === 'enemy'
-          && (piece.pt || '').toUpperCase() === 'Q';
-        const playerPawn = gameScene.captureSide === 'enemy'
-          && (targetPiece.pt || '').toUpperCase() === 'P';
+        const enemyQueen = gameScene.captureSide === 'enemy' && (piece.pt || '').toUpperCase() === 'Q';
+        const playerPawn = gameScene.captureSide === 'enemy' && (targetPiece.pt || '').toUpperCase() === 'P';
         if (enemyQueen && playerPawn) {
           gameScene.score += 1;
-          if (gameScene.scoreText) gameScene.scoreText.setText(`Pontuação: ${gameScene.score}`);
+          if (gameScene.scoreText) gameScene.scoreText.setText(`Pontuacao: ${gameScene.score}`);
         }
         return baseValue;
       }
     }
+  },
+  {
+    id: 'the_roooook',
+    name: 'The Roooook',
+    description: 'Quando uma de suas torres e capturada, voce ganha 1 ponto',
+    icon: 'circle',
+    rarity: BUFF_RARITIES.UNCOMMON,
+    price: 8,
+    hooks: {
+      onCapture: (gameScene, piece, targetPiece, baseValue) => {
+        if (gameScene.captureSide === 'enemy' && (targetPiece.pt || '').toUpperCase() === 'R') {
+          gameScene.score += 1;
+          if (gameScene.scoreText) gameScene.scoreText.setText(`Pontuacao: ${gameScene.score}`);
+        }
+        return baseValue;
+      }
+    }
+  },
+  {
+    id: 'accepting_defeat',
+    name: 'Accepting Defeat',
+    description: 'Terminar a rodada sem nenhum peao concede 2 pontos',
+    icon: 'circle',
+    rarity: BUFF_RARITIES.COMMON,
+    price: 6,
+    hooks: {
+      onRoundEnd: (gameScene) => {
+        const hasPawn = gameScene.playerPieces.some(piece => (piece.pt || '').toUpperCase() === 'P');
+        if (!hasPawn) {
+          gameScene.score += 2;
+          if (gameScene.scoreText) gameScene.scoreText.setText(`Pontuacao: ${gameScene.score}`);
+        }
+      }
+    }
+  },
+  {
+    id: 'en_passant_master',
+    name: 'En Passant Master',
+    description: 'Capturas en passant concedem 2 pontos adicionais',
+    icon: 'circle',
+    rarity: BUFF_RARITIES.COMMON,
+    price: 5,
+    hooks: {
+      onCapture: (gameScene, piece, targetPiece, baseValue) => {
+        if (gameScene.captureSide === 'player' && gameScene.captureType === 'en_passant') return baseValue + 2;
+        return baseValue;
+      }
+    }
+  },
+  {
+    id: 'catapult',
+    name: 'Catapult',
+    description: 'Peoes a frente de torres podem capturar a duas casas e se sacrificar',
+    icon: 'circle',
+    rarity: BUFF_RARITIES.RARE,
+    price: 8,
+    hooks: {
+      onCanMove: (gameScene, piece, toX, toY) => {
+        if (!gameScene.upgrades.includes('catapult') || gameScene.isEnemyPiece(piece)) return false;
+        if ((piece.pt || '').toUpperCase() !== 'P' || toX !== piece.x || toY !== piece.y - 2) return false;
+        const rookBehind = gameScene.playerPieces.some(other =>
+          (other.pt || '').toUpperCase() === 'R' && other.x === piece.x && other.y === piece.y + 1
+        );
+        const middle = gameScene.getPieceAt(piece.x, piece.y - 1);
+        const target = gameScene.getPieceAt(toX, toY);
+        return rookBehind && !middle && target && target.side === 'enemy';
+      }
+    }
+  },
+  {
+    id: 'pacifist',
+    name: 'Pacifist',
+    description: 'Se nenhum peao for perdido, ganha 1 ponto por peao vivo',
+    icon: 'circle',
+    rarity: BUFF_RARITIES.COMMON,
+    price: 7,
+    hooks: {
+      onRoundEnd: (gameScene) => {
+        const pawnCount = gameScene.playerPieces.filter(piece => (piece.pt || '').toUpperCase() === 'P').length;
+        if (pawnCount === gameScene.initialPlayerPawnCount) {
+          gameScene.score += pawnCount;
+          if (gameScene.scoreText) gameScene.scoreText.setText(`Pontuacao: ${gameScene.score}`);
+        }
+      }
+    }
+  },
+  {
+    id: 'swap',
+    name: 'Swap',
+    description: 'Bispos e cavalos podem trocar de lugar uma vez por rodada',
+    icon: 'circle',
+    rarity: BUFF_RARITIES.UNCOMMON,
+    price: 4,
+    hooks: {
+      onSwap: (gameScene, firstPiece, secondPiece) => {
+        if (gameScene.swapUsedThisRound) return false;
+        const firstType = (firstPiece.pt || '').toUpperCase();
+        const secondType = (secondPiece.pt || '').toUpperCase();
+        return !gameScene.isEnemyPiece(firstPiece)
+          && !gameScene.isEnemyPiece(secondPiece)
+          && (firstType === 'B' || firstType === 'N')
+          && firstType === secondType;
+      }
+    }
+  },
+  {
+    id: 'rooket',
+    name: 'Rooket',
+    description: 'Sua torre pode capturar uma fileira consecutiva de peoes',
+    icon: 'circle',
+    rarity: BUFF_RARITIES.UNCOMMON,
+    price: 5,
+    hooks: {
+      onCanMove: (gameScene, piece, toX, toY) => gameScene.isRooketMove(piece, toX, toY)
+    }
+  },
+  {
+    id: 'for_the_king',
+    name: 'For the King',
+    description: 'Seus peoes podem se sacrificar para capturar peoes inimigos a frente',
+    icon: 'circle',
+    rarity: BUFF_RARITIES.RARE,
+    price: 8,
+    hooks: {
+      onCanMove: (gameScene, piece, toX, toY) => gameScene.isForTheKingMove(piece, toX, toY)
+    }
   }
 ];
 
-// Mapa de ID -> Buff para acesso rápido
 export const BUFFS_MAP = {};
 BUFFS.forEach(buff => {
   BUFFS_MAP[buff.id] = buff;
 });
 
-/**
- * Obter informações de um buff
- */
 export function getBuffInfo(buffId) {
   return BUFFS_MAP[buffId] || null;
 }
 
-/**
- * Listar buffs por raridade
- */
 export function getBuffsByRarity(rarity) {
-  return BUFFS.filter(b => b.rarity === rarity);
+  return BUFFS.filter(buff => buff.rarity === rarity);
 }
 
 export function getShopRarityWeights(ownedBuffIds = []) {
   let weights = { ...SHOP_RARITY_WEIGHTS };
-
   for (const buffId of ownedBuffIds) {
     const buff = BUFFS_MAP[buffId];
     const hook = buff && buff.hooks && buff.hooks.onShopRarityWeights;
-    if (typeof hook === 'function') {
-      weights = hook(weights);
-    }
+    if (typeof hook === 'function') weights = hook(weights);
   }
-
   return weights;
 }
 
-/**
- * Gera ofertas da loja sem incluir buffs já adquiridos.
- * O sorteio de cada oferta usa os pesos 75/20/5 por raridade.
- */
 export function getShopBuffs(ownedBuffIds = [], amount = 3) {
   const owned = new Set(ownedBuffIds);
   const available = BUFFS.filter(buff => !owned.has(buff.id));
@@ -199,7 +299,6 @@ export function getShopBuffs(ownedBuffIds = [], amount = 3) {
       (total, rarity) => total + rarityWeights[rarity],
       0
     );
-
     let roll = Math.random() * totalWeight;
     const selectedRarity = availableRarities.find(rarity => {
       roll -= rarityWeights[rarity];
@@ -207,7 +306,6 @@ export function getShopBuffs(ownedBuffIds = [], amount = 3) {
     });
     const rarityPool = available.filter(buff => buff.rarity === selectedRarity);
     const selected = rarityPool[Math.floor(Math.random() * rarityPool.length)];
-
     offers.push(selected);
     available.splice(available.indexOf(selected), 1);
   }

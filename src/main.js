@@ -15,7 +15,7 @@ const config = {
     mode: Phaser.Scale.RESIZE,
     autoCenter: Phaser.Scale.CENTER_BOTH
   },
-  backgroundColor: '#222',
+  backgroundColor: '#121418',
   pixelArt: true,
   scene: [MenuScene, CharacterSelectScene, OpponentSelectScene, GameScene, ShopScene, GameOverScene, VictoryScene],
 };

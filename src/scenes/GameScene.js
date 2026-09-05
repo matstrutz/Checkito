@@ -16,6 +16,7 @@ export default class GameScene extends Phaser.Scene {
     this.boardOffsetY = 80;
     this.playerPieces = [];
     this.enemyPieces = [];
+    this.initialPlayerPawnCount = 0;
     this.selected = null;
     this.score = 0;
     // turnRound: in-match turn counter (player+enemy turns). campaignRound: meta progression across matches.
@@ -29,6 +30,7 @@ export default class GameScene extends Phaser.Scene {
     this.extraMoveRule = null;
     this.pathSide = null;
     this.lastMove = null; // { pieceId, fromX, fromY, toX, toY, pieceType }
+    this.swapUsedThisRound = false;
     // load character selection data from menu (if provided)
     this.playerCharacterId = data && data.playerCharacterId ? data.playerCharacterId : null;
     this.enemyCharacterId = data && data.enemyCharacterId ? data.enemyCharacterId : null;
@@ -67,6 +69,7 @@ export default class GameScene extends Phaser.Scene {
 
     // initial pieces
     this.placeInitialPieces();
+    this.initialPlayerPawnCount = this.playerPieces.filter(piece => (piece.pt || '').toUpperCase() === 'P').length;
     this.highlightGraphics = this.add.graphics();
     this.renderPieces();
 
@@ -112,6 +115,10 @@ export default class GameScene extends Phaser.Scene {
         }
 
         if (hookResult !== undefined && hookResult !== null) {
+          if (hookName === 'onCanMove') {
+            result = result === true || hookResult === true;
+            continue;
+          }
           if (result && typeof result === 'object' && hookResult && typeof hookResult === 'object') {
             result = { ...result, ...hookResult };
           } else {
@@ -132,17 +139,107 @@ export default class GameScene extends Phaser.Scene {
   }
 
   awardCapturePoints(piece, targetPiece, side) {
+    return this.awardCapturePointsWithType(piece, targetPiece, side, 'normal');
+  }
+
+  awardCapturePointsWithType(piece, targetPiece, side, captureType) {
     const capType = (targetPiece.pt || 'P').toUpperCase();
     const values = { P: 1, N: 3, B: 3, R: 5, Q: 8, K: 10 };
     const baseValue = side === 'player'
       ? (capType === 'K' ? (this.enemyCharacterConfig && this.enemyCharacterConfig.value) || values.K : values[capType] || 1)
       : 0;
     const previousSide = this.captureSide;
+    const previousCaptureType = this.captureType;
     this.captureSide = side;
+    this.captureType = captureType;
     const gain = this.applyBuffHooks('onCapture', piece, targetPiece, baseValue);
     this.captureSide = previousSide;
+    this.captureType = previousCaptureType;
     if (side === 'player') this.score += gain;
     if (this.scoreText) this.scoreText.setText(`Pontuação: ${this.score}`);
+    return gain;
+  }
+
+  isCatapultMove(piece, toX, toY) {
+    if (!this.upgrades.includes('catapult')) return false;
+    const target = this.getPieceAt(toX, toY);
+    const middle = this.getPieceAt(piece.x, piece.y - 1);
+    return (piece.pt || '').toUpperCase() === 'P'
+      && !this.isEnemyPiece(piece)
+      && toX === piece.x
+      && toY === piece.y - 2
+      && !middle
+      && target && target.side === 'enemy'
+      && this.playerPieces.some(other =>
+        (other.pt || '').toUpperCase() === 'R' && other.x === piece.x && other.y === piece.y + 1
+      );
+  }
+
+  isRooketMove(piece, toX, toY) {
+    if (!this.upgrades.includes('rooket') || this.isEnemyPiece(piece) || (piece.pt || '').toUpperCase() !== 'R') return false;
+    const dx = toX - piece.x;
+    const dy = toY - piece.y;
+    if (dx !== 0 && dy !== 0) return false;
+    const target = this.getPieceAt(toX, toY);
+    if (!target || target.side !== 'enemy' || (target.piece.pt || '').toUpperCase() !== 'P') return false;
+
+    const stepX = Math.sign(dx);
+    const stepY = Math.sign(dy);
+    let x = piece.x + stepX;
+    let y = piece.y + stepY;
+    let chainStarted = false;
+    while (x !== toX || y !== toY) {
+      const blocker = this.getPieceAt(x, y);
+      if (!blocker) {
+        if (chainStarted) return false;
+      } else if (blocker.side !== 'enemy' || (blocker.piece.pt || '').toUpperCase() !== 'P') {
+        return false;
+      } else {
+        chainStarted = true;
+      }
+      x += stepX;
+      y += stepY;
+    }
+    return chainStarted;
+  }
+
+  isForTheKingMove(piece, toX, toY) {
+    if (!this.upgrades.includes('for_the_king') || this.isEnemyPiece(piece)) return false;
+    if ((piece.pt || '').toUpperCase() !== 'P' || toX !== piece.x || toY !== piece.y - 1) return false;
+    const target = this.getPieceAt(toX, toY);
+    return Boolean(target && target.side === 'enemy' && (target.piece.pt || '').toUpperCase() === 'P');
+  }
+
+  canSwapPieces(firstPiece, secondPiece) {
+    if (!this.upgrades.includes('swap') || this.swapUsedThisRound || !firstPiece || !secondPiece) return false;
+    if (this.runBuffHooks('onSwap', firstPiece, secondPiece, false) !== true) return false;
+
+    const playerClone = this.clonePieces(this.playerPieces);
+    const enemyClone = this.clonePieces(this.enemyPieces);
+    const firstClone = playerClone.find(piece => piece.id === firstPiece.id);
+    const secondClone = playerClone.find(piece => piece.id === secondPiece.id);
+    if (!firstClone || !secondClone) return false;
+
+    const firstX = firstClone.x;
+    const firstY = firstClone.y;
+    firstClone.x = secondClone.x;
+    firstClone.y = secondClone.y;
+    secondClone.x = firstX;
+    secondClone.y = firstY;
+    const king = playerClone.find(piece => (piece.pt || '').toUpperCase() === 'K');
+    return !king || !this.isSquareAttacked(king.x, king.y, 'enemy', playerClone, enemyClone);
+  }
+
+  swapPieces(firstPiece, secondPiece) {
+    const firstX = firstPiece.x;
+    const firstY = firstPiece.y;
+    firstPiece.x = secondPiece.x;
+    firstPiece.y = secondPiece.y;
+    secondPiece.x = firstX;
+    secondPiece.y = firstY;
+    firstPiece.hasMoved = true;
+    secondPiece.hasMoved = true;
+    this.swapUsedThisRound = true;
   }
 
   continueOrEndPlayerTurn(piece, moveNumber = this.playerMovesThisTurn) {
@@ -194,14 +291,12 @@ export default class GameScene extends Phaser.Scene {
   drawBoard() {
     this.graphics.clear();
     const g = this.graphics;
-    g.lineStyle(2, 0x666666);
     for (let y = 0; y < ROWS; y++) {
       for (let x = 0; x < COLS; x++) {
         const rx = this.boardOffsetX + x * TILE_SIZE;
         const ry = this.boardOffsetY + y * TILE_SIZE;
-        g.fillStyle((x + y) % 2 === 0 ? 0x28303a : 0x1b2228, 1);
+        g.fillStyle((x + y) % 2 === 0 ? 0xe2d5a1 : 0x784f48, 1);
         g.fillRect(rx, ry, TILE_SIZE - 2, TILE_SIZE - 2);
-        g.strokeRect(rx, ry, TILE_SIZE - 2, TILE_SIZE - 2);
       }
     }
 
@@ -317,13 +412,13 @@ export default class GameScene extends Phaser.Scene {
   // show highlighted tiles for possible moves of a selected piece
   showHighlightsFor(piece) {
     this.highlightGraphics.clear();
-    this.highlightGraphics.fillStyle(0xffff00, 0.25);
+    this.highlightGraphics.fillStyle(0x777777, 0.8);
     for (let y = 0; y < ROWS; y++) {
       for (let x = 0; x < COLS; x++) {
         const side = this.isEnemyPiece(piece) ? 'enemy' : 'player';
         if (this.canMove(piece, x, y) && !this.moveLeavesKingInCheckForSide(piece, x, y, side)) {
           const { rx, ry } = this.tileToPixel(x, y);
-          this.highlightGraphics.fillRect(rx + 2, ry + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+          this.highlightGraphics.fillCircle(rx + TILE_SIZE / 2 - 1, ry + TILE_SIZE / 2 - 1, 10);
         }
       }
     }
@@ -453,6 +548,9 @@ export default class GameScene extends Phaser.Scene {
 
     // detect en passant: pawn moves diagonally to empty square capturing pawn behind
     const pt = (piece.pt || '').toUpperCase();
+    const forTheKingMove = side === 'player' && this.isForTheKingMove(piece, toX, toY);
+    const rooketMove = side === 'player' && this.isRooketMove(piece, toX, toY);
+    const catapultMove = side === 'player' && this.isCatapultMove(piece, toX, toY);
     if (pt === 'P') {
       const isEnemy = this.isEnemyPiece(piece);
       const dir = isEnemy ? 1 : -1;
@@ -471,7 +569,7 @@ export default class GameScene extends Phaser.Scene {
             // award points if player captured enemy by en-passant
             if (side === 'player') {
               const capturedPiece = captured || capturedPlayer;
-              this.awardCapturePoints(piece, capturedPiece, side);
+              this.awardCapturePointsWithType(piece, capturedPiece, side, 'en_passant');
             }
           }
         }
@@ -496,7 +594,7 @@ export default class GameScene extends Phaser.Scene {
 
     // normal capture on square
     const target = this.getPieceAt(toX, toY);
-    if (target) {
+    if (target && !forTheKingMove) {
       if (target.side === 'enemy') Phaser.Utils.Array.Remove(this.enemyPieces, target.piece);
       if (target.side === 'player') Phaser.Utils.Array.Remove(this.playerPieces, target.piece);
       // award points if player captures enemy
@@ -507,10 +605,40 @@ export default class GameScene extends Phaser.Scene {
       }
     }
 
+    if (rooketMove) {
+      const stepX = Math.sign(toX - fromX);
+      const stepY = Math.sign(toY - fromY);
+      let x = fromX + stepX;
+      let y = fromY + stepY;
+      while (x !== toX || y !== toY) {
+        const capturedPawn = this.getPieceAt(x, y);
+        if (capturedPawn && capturedPawn.side === 'enemy') {
+          Phaser.Utils.Array.Remove(this.enemyPieces, capturedPawn.piece);
+          this.awardCapturePoints(piece, capturedPawn.piece, side);
+        }
+        x += stepX;
+        y += stepY;
+      }
+    }
+
+    if (forTheKingMove) {
+      if (target && target.side === 'enemy') {
+        Phaser.Utils.Array.Remove(this.enemyPieces, target.piece);
+        this.awardCapturePoints(piece, target.piece, side);
+      }
+      Phaser.Utils.Array.Remove(this.playerPieces, piece);
+      this.lastMove = { pieceId: piece.id, fromX, fromY, toX, toY, pieceType: pt };
+      return;
+    }
+
     // move the piece
     piece.x = toX;
     piece.y = toY;
     piece.hasMoved = true;
+
+    if (catapultMove) {
+      Phaser.Utils.Array.Remove(this.playerPieces, piece);
+    }
 
     // record lastMove (before promotion decision)
     this.lastMove = { pieceId: piece.id, fromX, fromY, toX, toY, pieceType: (piece.pt || '').toUpperCase() };
@@ -542,6 +670,9 @@ export default class GameScene extends Phaser.Scene {
     const pClone = targetArr.find(p => p.id === piece.id);
     if (!pClone) return false;
 
+    const forTheKingSimulation = side === 'player' && this.isForTheKingMove(piece, toX, toY);
+    const rooketSimulation = side === 'player' && this.isRooketMove(piece, toX, toY);
+
     // remove any captured piece in opponent clone
     const capturedIndex = opponentArr.findIndex(e => e.x === toX && e.y === toY);
     if (capturedIndex >= 0) opponentArr.splice(capturedIndex, 1);
@@ -549,6 +680,39 @@ export default class GameScene extends Phaser.Scene {
     // move the cloned piece
     pClone.x = toX;
     pClone.y = toY;
+
+    // Catapult sacrifices the player pawn after its two-square capture.
+    const catapultSimulation = side === 'player'
+      && (piece.pt || '').toUpperCase() === 'P'
+      && toX === piece.x
+      && toY === piece.y - 2
+      && playerClone.some(other =>
+        (other.pt || '').toUpperCase() === 'R' && other.x === piece.x && other.y === piece.y + 1
+      );
+    if (catapultSimulation) {
+      const pawnIndex = targetArr.indexOf(pClone);
+      if (pawnIndex >= 0) targetArr.splice(pawnIndex, 1);
+    }
+
+    if (forTheKingSimulation) {
+      const pawnIndex = targetArr.indexOf(pClone);
+      if (pawnIndex >= 0) targetArr.splice(pawnIndex, 1);
+    }
+
+    if (rooketSimulation) {
+      const stepX = Math.sign(toX - piece.x);
+      const stepY = Math.sign(toY - piece.y);
+      let x = piece.x + stepX;
+      let y = piece.y + stepY;
+      while (x !== toX || y !== toY) {
+        const pawnIndex = opponentArr.findIndex(other =>
+          other.x === x && other.y === y && (other.pt || '').toUpperCase() === 'P'
+        );
+        if (pawnIndex >= 0) opponentArr.splice(pawnIndex, 1);
+        x += stepX;
+        y += stepY;
+      }
+    }
 
     // handle en passant in simulation: if pawn moved diagonally to empty square, remove opponent pawn behind
     const pt = (piece.pt || '').toUpperCase();
@@ -654,6 +818,17 @@ export default class GameScene extends Phaser.Scene {
     const found = this.getPieceAt(x, y);
 
     if (found && found.side === 'player') {
+      if (this.selected && found.piece !== this.selected && this.canSwapPieces(this.selected, found.piece)) {
+        const moveNumberBeforeTurnCheck = this.playerMovesThisTurn;
+        this.swapPieces(this.selected, found.piece);
+        this.playerMovesThisTurn += 1;
+        this.selected = null;
+        this.clearHighlights();
+        this.selectionGraphics.clear();
+        this.refreshBoard();
+        this.continueOrEndPlayerTurn(found.piece, moveNumberBeforeTurnCheck);
+        return;
+      }
       if (this.extraMoveRule) {
         if (this.extraMoveRule.allowedPieceId && found.piece.id !== this.extraMoveRule.allowedPieceId) return;
         if (this.extraMoveRule.excludedPieceId && found.piece.id === this.extraMoveRule.excludedPieceId) return;
@@ -762,6 +937,7 @@ export default class GameScene extends Phaser.Scene {
 
     // if match end conditions met (enemy defeated or turn limit reached), go to shop (end of match)
     if (this.enemyPieces.length === 0 || this.turnRound > this.maxRounds) {
+      this.runBuffHooks('onRoundEnd', null, null, null);
       // Increment the campaign round and charge checkpoints after the match.
       this.campaignRound++;
       const paymentCost = this.paymentInterval === PAYMENT_INTERVAL ? getPaymentCost(this.campaignRound) : 0;
@@ -791,6 +967,7 @@ export default class GameScene extends Phaser.Scene {
     // otherwise continue to player's turn
     this.playerMovesThisTurn = 0;
     this.extraMoveRule = null;
+    this.swapUsedThisRound = false;
     this.turnPhase = 'player';
     this.turnText.setText('Turno: Jogador');
   }
@@ -840,11 +1017,15 @@ export default class GameScene extends Phaser.Scene {
         }
       }
 
+      const specialMove = this.runBuffHooks('onCanMove', piece, toX, toY);
+      if (specialMove === true) return true;
+
       return false;
     }
 
     if (pt === 'R') {
       if (dx !== 0 && dy !== 0) return false;
+      if (this.runBuffHooks('onCanMove', piece, toX, toY) === true) return true;
       return this.isPathClear(piece.x, piece.y, toX, toY, piece);
     }
 

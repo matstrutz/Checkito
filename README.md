@@ -1,93 +1,88 @@
-# Roguelite Xadrez (Phaser 3)
+# Checkito
 
-Projeto experimental: um roguelite inspirado em xadrez, desenvolvido com Phaser 3.
+Roguelite inspirado em xadrez, desenvolvido com Phaser 3 e módulos ES para o navegador. O tabuleiro usa uma grade adaptada de 5 colunas por 6 linhas, com partidas curtas, progressão entre rodadas e augments permanentes.
 
-Resumo do que existe agora
-- Cena principal do jogo: `src/scenes/GameScene.js` — lógica do tabuleiro, regras de movimento (peças adaptadas ao tabuleiro 5x6), roque, en-passant, promoção (UI para o jogador) e IA simples.
-- Menu e fluxo: `src/scenes/MenuScene.js`, `src/scenes/CharacterSelectScene.js` (seletor de personagens), `src/scenes/GameOverScene.js`.
-- Progressão roguelite: `src/scenes/OpponentSelectScene.js` e `src/scenes/ShopScene.js` — seleção de oponentes, loja entre partidas e checkpoints de pagamento na campanha.
-- Dados de presets de personagem: `src/data/characters.js` (ex.: `TheSquire`, `TheAllRounder`).
-- Tiers de inimigos: `BASIC`, `ADVANCED`, `BOSS`, `BOSS_FINAL` e `SPECIAL` já estão disponíveis em `ENEMY_TIERS`. Cada inimigo possui um campo `tier` para controlar futuramente em quais rodadas ele pode aparecer.
+## Como executar
 
-Principais mudanças implementadas
-- Unificação de recurso: removido `coins/money` — agora existe apenas `score` (pontuação). O jogador começa com 0 pontos.
-- Capturas: cada captura adiciona pontos a `score` usando o mapa de valores: P=1, N=3, B=3, R=5, Q=8, K=10. Capturar o rei concede a recompensa indicada no card do oponente.
-- Opponent cards: em `OpponentSelectScene` cada card mostra `Recompensa: X pontos`, usando o valor definido no preset do inimigo.
-- Inimigos possuem `tier` e `value`: `BASIC` vale 6, `ADVANCED` vale 8, `BOSS` vale 10, `BOSS_FINAL` vale 15 e `TheAllRounder` é um `SPECIAL` que vale 12.
-- Buffs disponíveis em `src/data/buffs.js`: `Pawn's Game`, `Luck Move`, `Worth Challenger`, `Double Pawns`, `Double Jump`, `Ghost Bishops` e `Honorable Sacrifice`, usando hooks para modificar capturas, movimentos e ofertas da loja.
-- Shop e pagamento: `ShopScene` usa `score` para compras e para pagar a taxa periódica (configurada por `paymentInterval`). Se o jogador não tiver pontos suficientes para pagar, é `GameOver`.
-- Persistência: estado de progressão é salvo em `localStorage` sob a chave `checkito_state` com o formato { score, upgrades, round, playerCharacterId }.
-- Final de campanha: a campanha tem no máximo 30 rodadas. Ao concluir a rodada 30, o jogador vence.
-- Pagamentos: checkpoints acontecem nas rodadas 3, 6, 9, ..., 30, com custos configurados em `src/data/progression.js`: 20, 25, 30, 35, 40, 45, 50, 55, 60 e 80 pontos.
-
-Como rodar (desenvolvimento)
-1. Servir arquivos estáticos (Node):
+Na raiz do projeto, instale ou tenha Node.js disponível e inicie um servidor estático:
 
 ```powershell
-npx http-server -c-1 -p 8081
-# ou, se preferir via npm script
 npm run serve
 ```
 
-2. Abrir http://127.0.0.1:8081 no navegador.
+Depois abra `http://127.0.0.1:8080` no navegador. Também é possível usar `npx http-server -c-1 -p 8081` quando a porta padrão estiver ocupada.
 
-Testes rápidos sugeridos
-- Iniciar jogo → escolher personagem → verificar que `Pontuação` começa em 0 em `OpponentSelect`.
-- Jogar uma partida: capturar peças deve aumentar `Pontuação` pelos valores corretos (ex.: Cavalo = +3).
-- Ao vencer (capturar o rei inimigo) ganhar a recompensa mostrada no card do oponente.
-- Ir para a loja: comprar itens desconta pontos; se for rodada com pagamento obrigatório, pagar deduz pontos ou ocorrer `GameOver` se insuficiente.
+## Fluxo do jogo
 
-Arquivos-chave
-- `src/scenes/GameScene.js` — mecânica central do jogo, movimentos e cálculo de `score`.
-- `src/scenes/ShopScene.js` — loja entre partidas; compras e pagamento agora usam `score`.
-- `src/scenes/OpponentSelectScene.js` — seleção de oponentes e exibição de recompensa em pontos.
-- `src/scenes/CharacterSelectScene.js` — seleção inicial do jogador.
-- `src/data/characters.js` — presets de personagens (player/enemy).
-- `src/data/characters.js` — enum `ENEMY_TIERS` e formações dos inimigos.
-- `src/data/progression.js` — limite da campanha, intervalo e tabela de custos de pagamento.
+1. O jogador entra pelo menu e escolhe seu personagem.
+2. Escolhe um oponente disponível para a rodada atual.
+3. Joga uma partida no tabuleiro, capturando peças e acumulando `score`.
+4. Ao vencer, passa pela loja para comprar augments e pagar checkpoints quando necessário.
+5. Escolhe o próximo oponente e continua até completar a campanha ou perder.
 
-Próximos passos (priorizados)
-1. Corrigir a UI do `ShopScene` — tornar layout responsivo, melhorar exibição de itens, botões, e feedback de compra/pagamento.
-2. Criar alguns aprimoramentos (upgrades) testáveis na loja:
-	- `Bônus +10` — concede +10 pontos instantâneos (para testes).
-	- `Buff Turno` — efeito temporário por 1 partida (ex.: aumenta valor de capturas do jogador em +1).
-	- `Upgrade Permanente` — adiciona um upgrade persistente que modifica comportamento (ex.: +1 ponto por captura de peões).
-3. Balanceamento: ajustar recompensa dos cards de oponente (ex.: `difficulty × baseKingValue`) e custos na loja.
-4. Testes de fluxo completo: selecionar oponente → jogar → loja → pagar/recusar → persistência entre scenes.
+## Progressão
 
-Se quiser, eu posso: (A) corrigir a UI do `ShopScene` agora, ou (B) implementar os três aprimoramentos de teste listados. Qual prefere que eu faça primeiro?
+- A campanha possui até 30 rodadas.
+- O estado persistente usa `score`, `upgrades`, `round` e `playerCharacterId`.
+- O estado é salvo em `localStorage` com a chave `checkito_state`.
+- Pagamentos acontecem nas rodadas 3, 6, 9, ..., 30.
+- Os custos dos pagamentos ficam em `src/data/progression.js`.
+- A vitória ocorre ao concluir a rodada 30; a derrota ocorre ao perder uma partida ou não conseguir pagar um checkpoint.
 
-Como rodar (desenvolvimento)
-1. Servir arquivos estáticos (Node):
+## Pontuação
 
-```bash
-npx http-server -c-1 -p 8080
-# ou, se preferir via npm script
-npm run serve
-```
+Capturas do jogador usam os valores base abaixo:
 
-2. Abrir http://localhost:8080 no navegador.
+| Peça | Pontos |
+| --- | ---: |
+| Peão | 1 |
+| Cavalo | 3 |
+| Bispo | 3 |
+| Torre | 5 |
+| Dama | 8 |
+| Rei | 10 ou a recompensa do oponente |
 
-Sugestão de controle de versão
-- Recomendo commitar as mudanças com Git antes de encerrar uma sessão:
+Augments podem modificar esses valores ou reagir a outros eventos do jogo.
 
-```bash
-git init
-git add .
-git commit -m "Save progress: session summary and character presets"
-```
+## Augments
 
-Arquivos-chave
-- `src/scenes/GameScene.js` — mecânica central do jogo.
-- `src/scenes/MenuScene.js` — tela inicial.
-- `src/scenes/CharacterSelectScene.js` — seleção de personagem antes de iniciar.
-- `src/data/characters.js` — presets de personagens (player/enemy).
+Os augments ficam definidos em `src/data/buffs.js`. Cada um possui ID, nome, descrição, ícone, raridade, preço e hooks opcionais. Os IDs são armazenados no estado persistente e resolvidos por `BUFFS_MAP`.
 
-Próximos passos e itens pendentes
-- Testes e correções em movimentos (especialmente en-passant e checagem de xeque em cenários raros).
-- Melhorar IA e adicionar shop/roguelite progression.
-- Criar previews de personagem na seleção.
+Hooks disponíveis:
 
-Relatórios e histórico
-- Cada sessão de trabalho pode gerar um resumo datado em `docs/YYYY-MM-DD_SESSION_SUMMARY.md`.
+- `onCapture` modifica o valor de uma captura.
+- `onMove` pode manter o turno do jogador e limitar a peça do movimento extra.
+- `onPathBlocked` permite ou impede atravessar uma peça durante o caminho.
+- `onShopRarityWeights` altera os pesos de raridade das ofertas da loja.
 
+Os augments comprados aparecem no painel lateral da loja. O hover sobre cada ícone mostra seu nome e descrição.
+
+## Estrutura de pastas
+
+- `src/` — código da aplicação.
+- `src/scenes/` — cenas Phaser e fluxo de telas.
+- `src/data/` — personagens, augments e regras de progressão.
+- `assets/` — sprites e outros recursos carregados pelo jogo.
+
+Cada pasta possui um README próprio com detalhes do seu contrato e das convenções locais.
+
+## Arquivos principais
+
+- `src/main.js` — inicialização do Phaser e registro das cenas.
+- `src/scenes/GameScene.js` — tabuleiro, movimentos, turnos, IA, promoção e aplicação dos hooks.
+- `src/scenes/ShopScene.js` — compras, pagamentos e visual dos augments adquiridos.
+- `src/scenes/CharacterSelectScene.js` — seleção do personagem do jogador.
+- `src/scenes/OpponentSelectScene.js` — seleção de oponentes por rodada e tier.
+- `src/data/characters.js` — formações iniciais e valores dos personagens.
+- `src/data/buffs.js` — catálogo e comportamento dos augments.
+- `src/data/progression.js` — limite de campanha e custos de pagamento.
+
+## Teste manual rápido
+
+- Confirme que a pontuação inicial é exibida como 0.
+- Verifique as posições e tipos das peças após escolher um personagem.
+- Capture peças e confirme os valores de pontuação.
+- Compre um augment e confirme que ele desaparece das ofertas e aparece no painel lateral.
+- Passe o mouse sobre um augment adquirido e confirme o tooltip.
+- Avance pelas rodadas e confirme o formato `Rodada: atual / 30`.
+- Verifique o pagamento nos checkpoints e a vitória ao concluir a rodada 30.
